@@ -3,14 +3,7 @@ export interface EngineStatus {
   working: boolean;
 }
 
-export interface GeneratorStatus {
-  id: number;
-  running: boolean;
-  startTime: string;
-  endTime: string;
-}
-
-export type RakeStatus = 'Placed' | 'Unloading' | 'Removed' | 'None';
+export type RakeStatus = 'Placed' | 'Unloading' | 'Unloading Completed' | 'Removed' | 'None';
 
 export interface ReportData {
   // Step 1
@@ -34,24 +27,31 @@ export interface ReportData {
   leakProductLoc: string;
   leakProductType: string;
 
-  // Step 4
+  // Step 4 (Power)
   power33kv: boolean;
-  generators: GeneratorStatus[];
-  changeoverStatus: string;
+  // New Generator Logic Fields
+  runningGG: string;          // Name of the first running GG
+  runningGGStartTime: string;
+  runningGGDuration: string;  // Duration in hours
+  changeoverPerformed: boolean;
+  newGG: string;             // Name of new GG after changeover
+  newGGStartTime: string;
 
   // Step 5
   pipelineReceiving: boolean;
   pipelineProduct: string;
   pipelineTankNo: string;
   rakeStatus: RakeStatus;
-  rakeTime: string; // Generic time based on status
+  rakeTime: string;           // Placement or Unloading Start Time
+  rakeUnloadingTime: string;  // Completion time
+  rakeRemovalTime: string;    // Removal time if cleared
 
   // Step 6
-  officeACLight: boolean; // true = OK, false = Issue? Description says Single Toggle implies ON/OFF usually means OK/Not OK or Running/Not
+  officeACLight: boolean; 
   cbacsFunctional: boolean;
   cbacsIssue: string;
   cctvTotal: number;
-  cctvRunning: string; // Input string, convert to number for validation
+  cctvRunning: string; 
   cctvIssues: string;
   observationTower: string;
   observationNightVision: string;
@@ -74,18 +74,23 @@ export const INITIAL_DATA: ReportData = {
   leakProduct: false,
   leakProductLoc: '',
   leakProductType: 'MS',
+  
   power33kv: true,
-  generators: [
-    { id: 1, running: false, startTime: '', endTime: '' },
-    { id: 2, running: false, startTime: '', endTime: '' },
-    { id: 3, running: false, startTime: '', endTime: '' },
-  ],
-  changeoverStatus: 'Manual',
+  runningGG: '',
+  runningGGStartTime: '',
+  runningGGDuration: '',
+  changeoverPerformed: false,
+  newGG: '',
+  newGGStartTime: '',
+
   pipelineReceiving: false,
-  pipelineProduct: '',
+  pipelineProduct: 'MS',
   pipelineTankNo: '',
   rakeStatus: 'None',
   rakeTime: '',
+  rakeUnloadingTime: '',
+  rakeRemovalTime: '',
+
   officeACLight: true,
   cbacsFunctional: true,
   cbacsIssue: '',

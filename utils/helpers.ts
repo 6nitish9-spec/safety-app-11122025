@@ -20,18 +20,13 @@ export const generateAlerts = (data: ReportData): string[] => {
   if (data.leakHydrant) alerts.push('⚠️ ALERT: Hydrant Leak Detected');
   if (data.leakAir) alerts.push('⚠️ ALERT: Air Leak Detected');
 
-  // Generator Runtime
-  data.generators.forEach((gen) => {
-    if (gen.running && gen.startTime && gen.endTime) {
-      const start = new Date(`1970-01-01T${gen.startTime}`);
-      const end = new Date(`1970-01-01T${gen.endTime}`);
-      const diffMs = end.getTime() - start.getTime();
-      const diffHrs = diffMs / (1000 * 60 * 60);
-      if (diffHrs > 3) {
-        alerts.push(`⚠️ ALERT: Generator ${gen.id} ran > 3hrs`);
-      }
+  // Generator Alert (Specific Logic)
+  if (!data.power33kv) {
+    const hours = parseFloat(data.runningGGDuration) || 0;
+    if (hours > 3) {
+      alerts.push(`⚠️ ALERT: Generator ${data.runningGG} running > 3hrs! Changeover needed.`);
     }
-  });
+  }
 
   return alerts;
 };
@@ -83,13 +78,20 @@ export const formatWhatsAppReport = (data: ReportData): string => {
   const engineStatus =
     failedEngines.length > 0 ? `Issue (${failedEngines.join(', ')})` : 'All OK';
 
-  // Generators
-  const genDetails = data.power33kv
-    ? 'Grid ON'
-    : data.generators
-        .filter((g) => g.running)
-        .map((g) => `DG${g.id}: ${g.startTime}-${g.endTime}`)
-        .join(', ') || 'None Running';
+  // Power & Generators
+  let powerDetails = '';
+  if (data.power33kv) {
+    powerDetails = '*Power:* 33KV ON (Grid Available)';
+  } else {
+    powerDetails = '*Power:* 33KV OFF\n*Running GGs:*';
+    if (data.runningGG) {
+      powerDetails += `\n1. ${data.runningGG} (Started: ${data.runningGGStartTime})`;
+      if (data.runningGGDuration) powerDetails += ` - Ran ${data.runningGGDuration}hrs`;
+    }
+    if (data.changeoverPerformed && data.newGG) {
+      powerDetails += `\n2. ${data.newGG} (Started: ${data.newGGStartTime}) [Active]`;
+    }
+  }
 
   // Leaks
   const airStr = `Air: ${data.leakAir ? `YES (${data.leakAirLoc})` : 'NO'}`;
@@ -103,10 +105,19 @@ export const formatWhatsAppReport = (data: ReportData): string => {
   const pipelineStr = data.pipelineReceiving
     ? `Receiving (${data.pipelineProduct} -> ${data.pipelineTankNo})`
     : 'Stopped';
-  const rakeStr =
-    data.rakeStatus !== 'None'
-      ? `${data.rakeStatus} @ ${data.rakeTime}`
-      : 'No Activity';
+    
+  let rakeStr = 'No Activity';
+  if (data.rakeStatus !== 'None') {
+    if (data.rakeStatus === 'Placed') rakeStr = `Placed @ ${data.rakeTime}`;
+    else if (data.rakeStatus === 'Unloading') rakeStr = `Unloading Started @ ${data.rakeTime}`;
+    else if (data.rakeStatus === 'Unloading Completed') {
+      rakeStr = `Unloading Completed @ ${data.rakeUnloadingTime}`;
+      // Logic: Only show removed time if status is explicitly Removed. 
+      // If user is in Unloading Completed, we assume it's not removed or they haven't updated it yet.
+    } else if (data.rakeStatus === 'Removed') {
+      rakeStr = `Removed @ ${data.rakeRemovalTime}`;
+    }
+  }
 
   // Security
   const cbacsStr = data.cbacsFunctional
@@ -127,9 +138,7 @@ ${alertSection}*Guard:* ${data.guardName} (${data.patrolStart}-${data.patrolEnd}
 *Storage:* TK13: ${data.tk13Level}m | TK29: ${data.tk29Level}m
 *Leakages:* ${leakLine}
 
-*Power:* ${data.power33kv ? '33KV ON' : '33KV OFF'}
-*Generators:* ${genDetails}
-*Changeover:* ${data.changeoverStatus}
+${powerDetails}
 
 *Logistics:*
 Pipeline: ${pipelineStr}

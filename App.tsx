@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Copy, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, CheckCircle, AlertTriangle, MessageCircle } from 'lucide-react';
 import { Step1, Step2, Step3, Step4, Step5, Step6 } from './components/Steps';
 import { ReportData, INITIAL_DATA } from './types';
 import { checkNotifications, formatWhatsAppReport, saveReportTimestamp } from './utils/helpers';
@@ -36,16 +36,22 @@ function App() {
         return true;
       case 4:
         if (!data.power33kv) {
-          // If power is off, check running generators have times
-          const invalidGen = data.generators.find(
-            (g) => g.running && (!g.startTime || !g.endTime)
-          );
-          if (invalidGen) return false;
+          // If power is OFF, we need at least the running GG details
+          if (!data.runningGG || !data.runningGGStartTime) return false;
+          // If changeover is done, we need new GG details
+          if (data.changeoverPerformed && (!data.newGG || !data.newGGStartTime)) return false;
         }
         return true;
       case 5:
         if (data.pipelineReceiving && (!data.pipelineProduct || !data.pipelineTankNo)) return false;
-        if (data.rakeStatus !== 'None' && !data.rakeTime) return false;
+        // Rake validation based on status
+        if (data.rakeStatus === 'Placed' || data.rakeStatus === 'Unloading') {
+          if (!data.rakeTime) return false;
+        }
+        if (data.rakeStatus === 'Unloading Completed') {
+           if (!data.rakeUnloadingTime) return false;
+        }
+        if (data.rakeStatus === 'Removed' && !data.rakeRemovalTime) return false;
         return true;
       case 6:
         if (!data.cctvRunning) return false;
@@ -100,6 +106,11 @@ function App() {
     alert('Report copied to clipboard! Open WhatsApp and paste.');
   };
 
+  const shareToWhatsApp = () => {
+    const url = `https://wa.me/?text=${encodeURIComponent(finalReport)}`;
+    window.open(url, '_blank');
+  };
+
   if (reportGenerated) {
     return (
       <div className="min-h-screen bg-gray-100 p-4 flex items-center justify-center">
@@ -107,24 +118,36 @@ function App() {
           <div className="text-center space-y-2">
             <CheckCircle className="w-16 h-16 text-green-500 mx-auto" />
             <h2 className="text-2xl font-bold text-gray-800">Report Ready</h2>
-            <p className="text-gray-500">Review and copy for WhatsApp</p>
+            <p className="text-gray-500">Review and share</p>
           </div>
           <div className="bg-gray-50 p-4 rounded border whitespace-pre-wrap text-sm font-mono text-gray-700 max-h-96 overflow-y-auto">
             {finalReport}
           </div>
-          <button
-            onClick={copyToClipboard}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-          >
-            <Copy size={20} />
-            Copy to Clipboard
-          </button>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
-          >
-            Start New Report
-          </button>
+          
+          <div className="space-y-3">
+             <button
+               onClick={shareToWhatsApp}
+               className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+             >
+               <MessageCircle size={20} />
+               Send to WhatsApp
+             </button>
+             
+             <button
+               onClick={copyToClipboard}
+               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+             >
+               <Copy size={20} />
+               Copy to Clipboard
+             </button>
+             
+             <button
+               onClick={() => window.location.reload()}
+               className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
+             >
+               Start New Report
+             </button>
+          </div>
         </div>
       </div>
     );
